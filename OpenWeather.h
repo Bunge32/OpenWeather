@@ -31,19 +31,19 @@ class OW_Weather: public JsonListener {
     bool getForecast(OW_current *current, OW_hourly *hourly, OW_daily  *daily,
                      String api_key, String latitude, String longitude,
                      String units, String language, bool secure = true);
-
+    bool getGeo(OW_geo *geo, String address); 
     // Called by library (or user sketch), sends a GET request to a https (secure) url
     bool parseRequest(String url); // and parses response, returns true if no parse errors
-
+    bool parseRequestgeo(String url);
     // Called by library (or user sketch), sends a GET request to a http (insecure) url
     bool parseRequestSecure(String* url); 
     bool parseRequestInsecure(String* url); 
 
     void partialDataSet(bool partialSet);
-
     float    lat = 0;
     float    lon = 0;
     String   timezone = "";
+    String   geocoderstring;
 
   private: // Streaming parser callback functions, allow tracking and decisions
 
@@ -84,6 +84,7 @@ class OW_Weather: public JsonListener {
     OW_current  *current;  // pointer provided by sketch to the OW_current struct
     OW_hourly   *hourly;   // pointer provided by sketch to the OW_hourly struct
     OW_daily    *daily;    // pointer provided by sketch to the OW_daily struct
+    OW_geo      *geo;
 
     String      valuePath;  // object (i.e. sequential key) path (like a "file path")
                             // taken to the name:value pair in the form "hourly/data"

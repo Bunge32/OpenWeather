@@ -116,6 +116,11 @@ typedef struct OW_daily {
 
 } OW_daily;
 
+typedef struct OW_geo {
+	float coordinates[1];
+  
+} OW_geo;
+
 
 // Structures for minimal set of data points for TFT_eSPI examples to reduce RAM needs
 /*

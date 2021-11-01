@@ -34,9 +34,7 @@
 // ESP8266: Setting secure to false will invoke an insecure connection with AXTLS
 //          for the connection, when set true BearSSL will be used.
 // ESP32:   Secure parameter has no affect.
-bool OW_Weather::getForecast(OW_current *current, OW_hourly *hourly, OW_daily *daily,
-                             String api_key, String latitude, String longitude,
-                             String units, String language, bool secure) {
+bool OW_Weather::getForecast(OW_current *current, OW_hourly *hourly, OW_daily *daily, String api_key, String latitude, String longitude, String units, String language, bool secure) {
 
   data_set = "";
   hourly_index = 0;
@@ -61,6 +59,30 @@ bool OW_Weather::getForecast(OW_current *current, OW_hourly *hourly, OW_daily *d
 
   // Null out pointers to prevent crashes
   this->current  = nullptr;
+  this->hourly   = nullptr;
+  this->daily    = nullptr;
+
+  return result;
+}
+
+
+bool OW_Weather::getGeo(OW_geo *geo,String address) {
+
+  data_set = "";
+  hourly_index = 0;
+  daily_index = 0;
+  bool secure = false; 
+  bool Secure = secure;
+  // Local copies of structure pointers, the structures are filled during parsing
+  this->geo   = geo;
+  this->hourly   = hourly;
+  this->daily    = daily;
+
+  String url = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=" + address + "&benchmark=4&format=JSON";
+  bool result = parseRequestgeo(url);
+
+  // Null out pointers to prevent crashes
+  this->geo  = nullptr;
   this->hourly   = nullptr;
   this->daily    = nullptr;
 
@@ -143,9 +165,11 @@ bool OW_Weather::parseRequest(String url) {
     {
       c = client.read();
       parser.parse(c);
+      OW_STATUS_PRINT(c);
 #ifdef SHOW_JSON
       if (c == '{' || c == '[' || c == '}' || c == ']') Serial.println();
-      Serial.print(c); if (ccount++ > 100 && c == ',') {ccount = 0; Serial.println();}
+      Serial.print(c);
+      if (ccount++ > 100 && c == ',') {ccount = 0; Serial.println();}
 #endif
     }
 
@@ -168,7 +192,98 @@ bool OW_Weather::parseRequest(String url) {
   // A message has been parsed, but the data-point correctness is unknown
   return parseOK;
 }
+//
+bool OW_Weather::parseRequestgeo(String url) {
 
+  uint32_t dt = millis();
+
+  OW_STATUS_PRINTF("\n\nThe connection to server is secure (https). Certificate not checked.\n");
+  WiFiClientSecure client;
+  client.setInsecure(); // Certificate not checked
+
+  const char*  host = "geocoding.geo.census.gov";
+  port = 443;
+
+  if (!client.connect(host, port))
+  {
+    OW_STATUS_PRINTF("Connection failed.\n");
+    return false;
+  }
+
+  JSON_Decoder parser;
+  parser.setListener(this);
+
+  uint32_t timeout = millis();
+  char c = 0;
+  parseOK = false;
+
+#ifdef SHOW_JSON
+  int ccount = 0;
+#endif
+  // Send GET request
+  OW_STATUS_PRINT("Sending GET request to "); OW_STATUS_PRINT(host); OW_STATUS_PRINT(" port "); OW_STATUS_PRINT(port); OW_STATUS_PRINTF("\n");
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "Connection: close\r\n\r\n");
+
+  // Pull out any header, X-Forecast-API-Calls: reports current daily API call count
+  while (client.connected())
+  {
+    String line = client.readStringUntil('\n');
+    if (line == "\r") {
+      OW_STATUS_PRINTF("Header end found\n");
+      break;
+    }
+    //
+
+#ifdef SHOW_HEADER
+    Serial.println(line);
+    OW_STATUS_PRINTF(line);
+#endif
+
+    if ((millis() - timeout) > 5000UL)
+    {
+      OW_STATUS_PRINTF ("HTTP header timeout\n");
+      client.stop();
+      return false;
+    }
+  }
+
+  OW_STATUS_PRINTF("\nParsing JSON\n");
+
+  // Parse the JSON data, available() includes yields
+  while ( client.available() > 0 || client.connected())
+  {
+    while(client.available() > 0)
+    {
+      char d;
+      c,d = client.read();
+      geocoderstring += d;
+      parser.parse(c);
+      OW_STATUS_PRINT(c);
+#ifdef SHOW_JSON
+      if (c == '{' || c == '[' || c == '}' || c == ']') Serial.println();
+      Serial.print(c); if (ccount++ > 100 && c == ',') {ccount = 0; Serial.println();}
+#endif
+    }
+
+    if ((millis() - timeout) > 8000UL)
+    {
+      OW_STATUS_PRINTF("Client timeout during JSON parse\n");
+      parser.reset();
+      client.stop();
+      return parseOK;
+    }
+    yield();
+  }
+
+  OW_STATUS_PRINTF("\nDone in "); OW_STATUS_PRINT(millis()-dt); OW_STATUS_PRINTF(" ms\n");
+
+  parser.reset();
+
+  client.stop();
+  
+  // A message has been parsed, but the data-point correctness is unknown
+  return parseOK;
+}
 #else // ESP8266 version
 
 /***************************************************************************************
@@ -630,7 +745,15 @@ void OW_Weather::fullDataSet(const char *val) {
     return;
   }
 
-}
+  if (currentParent == "result") {
+    data_set = "geo";
+    if (currentSet == "addressMatches"){
+      if (currentKey == "coordinates") geo->coordinates[1] = value.toFloat();
+    }
+    return;
+  }
+
+  }
 
 /***************************************************************************************
 ** Function name:           partialDataSet
@@ -797,4 +920,6 @@ void OW_Weather::partialDataSet(const char *val) {
     return;
   }
 
-}
+
+
+  }
