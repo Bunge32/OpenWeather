@@ -1,4 +1,9 @@
 # ESP8266 and ESP32 OpenWeather client
+Modified to handle Geocoding from Geocoder.geo.census.gov a Free US gov site that has a API that doesnt use keys.
+
+Has .getGeo command which pulls the JSON from the Geocoder.
+
+See https://github.com/Bunge32/WiFiWeatherArduino for example in use. 
 
 Arduino client library for https://openweathermap.org/
 
